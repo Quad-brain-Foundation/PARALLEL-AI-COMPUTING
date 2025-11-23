@@ -1,0 +1,16 @@
+=== PARALLEL AI V2 PIPELINE ===
+Generated: Sun Nov 23 22:35:52 UTC 2025
+
+FILE: collected/ai_transpiler/msg.txt
+FILE: collected/build_windows-latest/build.txt
+FILE: collected/ai_code/msg.txt
+FILE: collected/ai_proof/proof.txt
+FILE: collected/ai_sec/msg.txt
+FILE: collected/ai_plan/msg.txt
+FILE: collected/ai_spec/msg.txt
+FILE: collected/build_ubuntu-latest/build.txt
+FILE: collected/ai_nasm/msg.txt
+FILE: collected/build_macos-latest/build.txt
+FILE: collected/ai_meaning/msg.txt
+
+=== END ===
