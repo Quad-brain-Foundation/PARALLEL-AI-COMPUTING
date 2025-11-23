@@ -1,4 +1,4 @@
-name: parallel-ai-v3
+name: parallel-ai-v4
 
 on:
   push:
@@ -171,7 +171,7 @@ jobs:
 
 
   ############################################################
-  # 3) Aggregation
+  # 3) Aggregate AI Outputs + 3OS Builds
   ############################################################
   aggregate:
     runs-on: ubuntu-latest
@@ -186,7 +186,7 @@ jobs:
       - name: Generate Final ProofLedger
         run: |
           mkdir final
-          echo "=== PARALLEL AI V3 PIPELINE ===" > final/ProofLedger.txt
+          echo "=== PARALLEL AI V4 PIPELINE ===" > final/ProofLedger.txt
           echo "Generated: $(date)" >> final/ProofLedger.txt
           echo "" >> final/ProofLedger.txt
           find collected -type f -exec echo "{}" >> final/ProofLedger.txt \;
@@ -207,7 +207,7 @@ jobs:
 
 
   ############################################################
-  # 4) Auto Release + Version Tag
+  # 4) Auto Release + Version Tag (OS별 ZIP 포함)
   ############################################################
   release:
     runs-on: ubuntu-latest
@@ -218,7 +218,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download final artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: collected_release
@@ -229,27 +229,63 @@ jobs:
           VER="v$(date +'%Y%m%d%H%M%S')"
           echo "version=$VER" >> $GITHUB_OUTPUT
 
-      - name: Create Release Notes
+      ########################################################
+      # OS별 ZIP 개별 생성
+      ########################################################
+      - name: Create OS ZIPs
         run: |
-          mkdir rel
-          echo "Parallel-AI V3 Auto Release" > rel/notes.txt
-          echo "Generated at: $(date)" >> rel/notes.txt
-          echo "" >> rel/notes.txt
-          echo "Artifacts included:" >> rel/notes.txt
-          find collected_release -type f >> rel/notes.txt
-
-      - name: Zip Final Bundle
-        run: |
+          mkdir os_zip
           cd collected_release
-          zip -r ../rel/final_bundle.zip .
+
+          if [ -d "build_ubuntu-latest" ]; then
+            cd build_ubuntu-latest
+            zip -r ../../os_zip/ubuntu_build.zip .
+            cd ..
+          fi
+
+          if [ -d "build_macos-latest" ]; then
+            cd build_macos-latest
+            zip -r ../../os_zip/macos_build.zip .
+            cd ..
+          fi
+
+          if [ -d "build_windows-latest" ]; then
+            cd build_windows-latest
+            zip -r ../../os_zip/windows_build.zip .
+            cd ..
+          fi
+
+          # Full bundle
+          zip -r ../os_zip/full_bundle.zip .
           cd ..
 
+      ########################################################
+      # Release Notes 생성
+      ########################################################
+      - name: Create Release Notes
+        run: |
+          echo "Parallel-AI V4 Auto Release" > release_notes.txt
+          echo "Version: ${{ steps.version.outputs.version }}" >> release_notes.txt
+          echo "" >> release_notes.txt
+          echo "OS별 빌드:" >> release_notes.txt
+          echo "- ubuntu_build.zip" >> release_notes.txt
+          echo "- macos_build.zip" >> release_notes.txt
+          echo "- windows_build.zip" >> release_notes.txt
+          echo "" >> release_notes.txt
+          echo "전체 Bundle: full_bundle.zip" >> release_notes.txt
+
+      ########################################################
+      # GitHub Release 생성
+      ########################################################
       - name: Create GitHub Release with Tag
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.version }}
           name: "Parallel-AI Release ${{ steps.version.outputs.version }}"
-          body_path: rel/notes.txt
+          body_path: release_notes.txt
           files: |
-            rel/final_bundle.zip
-            collected_release/**/*
+            os_zip/ubuntu_build.zip
+            os_zip/macos_build.zip
+            os_zip/windows_build.zip
+            os_zip/full_bundle.zip
+            collected_release/final_proofledger/ProofLedger.txt
