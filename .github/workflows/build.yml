@@ -1,4 +1,4 @@
-name: parallel-ai-v2
+name: parallel-ai-v3
 
 on:
   push:
@@ -25,11 +25,11 @@ jobs:
           echo "Snapshot: $(date)" > ai_input/info.txt
           echo "input_path=ai_input" >> $GITHUB_OUTPUT
 
+
   ############################################################
-  # 1) Parallel AI Nodes (8 units)
+  # 1) Parallel AI Nodes (8 Units)
   ############################################################
 
-  # AI-1 — Code Analyzer
   ai_code_analyzer:
     runs-on: ubuntu-latest
     needs: prepare
@@ -43,7 +43,6 @@ jobs:
           name: ai_code
           path: out_code
 
-  # AI-2 — Transpiler
   ai_transpiler:
     runs-on: ubuntu-latest
     needs: prepare
@@ -57,7 +56,6 @@ jobs:
           name: ai_transpiler
           path: out_trans
 
-  # AI-3 — Spec Checker
   ai_spec:
     runs-on: ubuntu-latest
     needs: prepare
@@ -71,7 +69,6 @@ jobs:
           name: ai_spec
           path: out_spec
 
-  # AI-4 — Runtime Meaning Engine
   ai_meaning:
     runs-on: ubuntu-latest
     needs: prepare
@@ -85,7 +82,6 @@ jobs:
           name: ai_meaning
           path: out_meaning
 
-  # AI-5 — NASM Optimizer
   ai_nasm_opt:
     runs-on: ubuntu-latest
     needs: prepare
@@ -99,7 +95,6 @@ jobs:
           name: ai_nasm
           path: out_nasm
 
-  # AI-6 — Build Planner
   ai_build_planner:
     runs-on: ubuntu-latest
     needs: prepare
@@ -113,7 +108,6 @@ jobs:
           name: ai_plan
           path: out_plan
 
-  # AI-7 — Security/Spec Validator
   ai_security:
     runs-on: ubuntu-latest
     needs: prepare
@@ -127,7 +121,6 @@ jobs:
           name: ai_sec
           path: out_sec
 
-  # AI-8 — Proof Generator
   ai_proof:
     runs-on: ubuntu-latest
     needs: prepare
@@ -141,11 +134,22 @@ jobs:
           name: ai_proof
           path: out_proof
 
+
   ############################################################
   # 2) 3OS Build (Ubuntu / macOS / Windows)
   ############################################################
   build_3os:
-    needs: [ai_code_analyzer, ai_transpiler, ai_spec, ai_meaning, ai_nasm_opt, ai_build_planner, ai_security, ai_proof]
+    needs:
+      [
+        ai_code_analyzer,
+        ai_transpiler,
+        ai_spec,
+        ai_meaning,
+        ai_nasm_opt,
+        ai_build_planner,
+        ai_security,
+        ai_proof
+      ]
     strategy:
       fail-fast: false
       matrix:
@@ -165,6 +169,7 @@ jobs:
           name: build_${{ matrix.os }}
           path: build
 
+
   ############################################################
   # 3) Aggregation
   ############################################################
@@ -174,7 +179,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Download all artifacts (AI + OS builds)
       - uses: actions/download-artifact@v4
         with:
           path: collected
@@ -182,12 +186,10 @@ jobs:
       - name: Generate Final ProofLedger
         run: |
           mkdir final
-          echo "=== PARALLEL AI V2 PIPELINE ===" > final/ProofLedger.txt
+          echo "=== PARALLEL AI V3 PIPELINE ===" > final/ProofLedger.txt
           echo "Generated: $(date)" >> final/ProofLedger.txt
           echo "" >> final/ProofLedger.txt
-          find collected -type f -exec echo "FILE: {}" >> final/ProofLedger.txt \;
-          echo "" >> final/ProofLedger.txt
-          echo "=== END ===" >> final/ProofLedger.txt
+          find collected -type f -exec echo "{}" >> final/ProofLedger.txt \;
 
       - uses: actions/upload-artifact@v4
         with:
@@ -202,3 +204,52 @@ jobs:
           git add ProofLedger-latest.txt
           git commit -m "Update ProofLedger"
           git push
+
+
+  ############################################################
+  # 4) Auto Release + Version Tag
+  ############################################################
+  release:
+    runs-on: ubuntu-latest
+    needs: aggregate
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download final artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: collected_release
+
+      - name: Generate auto version tag
+        id: version
+        run: |
+          VER="v$(date +'%Y%m%d%H%M%S')"
+          echo "version=$VER" >> $GITHUB_OUTPUT
+
+      - name: Create Release Notes
+        run: |
+          mkdir rel
+          echo "Parallel-AI V3 Auto Release" > rel/notes.txt
+          echo "Generated at: $(date)" >> rel/notes.txt
+          echo "" >> rel/notes.txt
+          echo "Artifacts included:" >> rel/notes.txt
+          find collected_release -type f >> rel/notes.txt
+
+      - name: Zip Final Bundle
+        run: |
+          cd collected_release
+          zip -r ../rel/final_bundle.zip .
+          cd ..
+
+      - name: Create GitHub Release with Tag
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: "Parallel-AI Release ${{ steps.version.outputs.version }}"
+          body_path: rel/notes.txt
+          files: |
+            rel/final_bundle.zip
+            collected_release/**/*
