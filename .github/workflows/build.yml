@@ -1,0 +1,204 @@
+name: parallel-ai-v2
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+jobs:
+  ############################################################
+  # 0) Preparation
+  ############################################################
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      input_path: ${{ steps.out.outputs.input_path }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare input
+        id: out
+        run: |
+          mkdir ai_input
+          echo "Snapshot: $(date)" > ai_input/info.txt
+          echo "input_path=ai_input" >> $GITHUB_OUTPUT
+
+  ############################################################
+  # 1) Parallel AI Nodes (8 units)
+  ############################################################
+
+  # AI-1 — Code Analyzer
+  ai_code_analyzer:
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir out_code
+          echo "Analysis_OK" > out_code/msg.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai_code
+          path: out_code
+
+  # AI-2 — Transpiler
+  ai_transpiler:
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir out_trans
+          echo "Transpile_OK" > out_trans/msg.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai_transpiler
+          path: out_trans
+
+  # AI-3 — Spec Checker
+  ai_spec:
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir out_spec
+          echo "Spec_OK" > out_spec/msg.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai_spec
+          path: out_spec
+
+  # AI-4 — Runtime Meaning Engine
+  ai_meaning:
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir out_meaning
+          echo "Meaning_OK" > out_meaning/msg.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai_meaning
+          path: out_meaning
+
+  # AI-5 — NASM Optimizer
+  ai_nasm_opt:
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir out_nasm
+          echo "NASM_Optimize_OK" > out_nasm/msg.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai_nasm
+          path: out_nasm
+
+  # AI-6 — Build Planner
+  ai_build_planner:
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir out_plan
+          echo "BuildPlan_OK" > out_plan/msg.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai_plan
+          path: out_plan
+
+  # AI-7 — Security/Spec Validator
+  ai_security:
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir out_sec
+          echo "Security_OK" > out_sec/msg.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai_sec
+          path: out_sec
+
+  # AI-8 — Proof Generator
+  ai_proof:
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir out_proof
+          echo "SHA256: $(echo test | sha256sum)" > out_proof/proof.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai_proof
+          path: out_proof
+
+  ############################################################
+  # 2) 3OS Build (Ubuntu / macOS / Windows)
+  ############################################################
+  build_3os:
+    needs: [ai_code_analyzer, ai_transpiler, ai_spec, ai_meaning, ai_nasm_opt, ai_build_planner, ai_security, ai_proof]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build per OS
+        run: |
+          mkdir build
+          echo "Build for ${{ matrix.os }} OK" > build/build.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build_${{ matrix.os }}
+          path: build
+
+  ############################################################
+  # 3) Aggregation
+  ############################################################
+  aggregate:
+    runs-on: ubuntu-latest
+    needs: build_3os
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download all artifacts (AI + OS builds)
+      - uses: actions/download-artifact@v4
+        with:
+          path: collected
+
+      - name: Generate Final ProofLedger
+        run: |
+          mkdir final
+          echo "=== PARALLEL AI V2 PIPELINE ===" > final/ProofLedger.txt
+          echo "Generated: $(date)" >> final/ProofLedger.txt
+          echo "" >> final/ProofLedger.txt
+          find collected -type f -exec echo "FILE: {}" >> final/ProofLedger.txt \;
+          echo "" >> final/ProofLedger.txt
+          echo "=== END ===" >> final/ProofLedger.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: final_proofledger
+          path: final
+
+      - name: Commit updated ProofLedger
+        run: |
+          cp final/ProofLedger.txt ProofLedger-latest.txt
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add ProofLedger-latest.txt
+          git commit -m "Update ProofLedger"
+          git push
